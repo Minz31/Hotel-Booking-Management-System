@@ -1,0 +1,423 @@
+// Hotel Booking System Data Model - Enhanced & Production-Ready
+// Fixed all critical issues + Added improvements
+
+// --- CORE ENTITIES ---
+
+Table hotels [headercolor: #3b5bdb] {
+  id string [pk]
+  name string [not null]
+  address string
+  city string
+  state string
+  country string
+  zip_code string
+  phone string
+  email string
+  description text
+  star_rating int // 1-5 star rating
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  is_active boolean [default: true]
+  
+  Indexes {
+    email [unique]
+    (city, country) // Fast lookup by location
+  }
+}
+
+Table room_types [headercolor: #e67e22] {
+  id string [pk]
+  hotel_id string [ref: > hotels.id, not null]
+  name string [not null]
+  description text
+  max_occupancy int [not null]
+  bed_type string // single, double, queen, king
+  amenities text // JSON or comma-separated
+  base_price decimal // Default/reference price
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  is_active boolean [default: true]
+  
+  Indexes {
+    hotel_id
+  }
+}
+
+Table rooms [headercolor: #f1c40f] {
+  id string [pk]
+  hotel_id string [ref: > hotels.id, not null]
+  room_type_id string [ref: > room_types.id, not null]
+  room_number string [not null]
+  floor string
+  status string [not null, default: 'available'] // available, occupied, maintenance, blocked
+  last_maintenance_date timestamp
+  notes text // Special notes about the room
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  is_active boolean [default: true]
+  
+  Indexes {
+    (hotel_id, room_number) [unique] // ✅ FIX: Prevent duplicate room numbers per hotel
+    hotel_id
+    room_type_id
+    status
+  }
+}
+
+Table tariffs [headercolor: #27ae60] {
+  id string [pk]
+  hotel_id string [ref: > hotels.id, not null]
+  room_type_id string [ref: > room_types.id, not null]
+  price decimal [not null]
+  currency string [default: 'USD']
+  start_date date [not null]
+  end_date date [not null]
+  description string
+  is_weekend boolean [default: false] // Weekend pricing
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  is_active boolean [default: true]
+  
+  Indexes {
+    (hotel_id, room_type_id, start_date, end_date)
+    hotel_id
+    room_type_id
+  }
+  
+  Note: 'Ensure no overlapping date ranges for same room_type_id via application logic'
+}
+
+// --- GUEST MANAGEMENT ---
+
+Table guests [headercolor: #9b59b6] {
+  id string [pk]
+  first_name string [not null]
+  last_name string [not null]
+  email string [not null, unique] // ✅ FIX: Unique email
+  phone string
+  address string
+  city string
+  state string
+  country string
+  zip_code string
+  date_of_birth date
+  id_proof_type string // passport, driver_license, national_id
+  id_proof_number string
+  registration_date timestamp [default: `now()`]
+  last_login timestamp
+  is_active boolean [default: true]
+  
+  Indexes {
+    email [unique]
+    phone
+  }
+}
+
+// --- BOOKING MANAGEMENT ---
+
+Table bookings [headercolor: #e74c3c] {
+  id string [pk]
+  guest_id string [ref: > guests.id, not null]
+  hotel_id string [ref: > hotels.id, not null]
+  check_in_date date [not null]
+  check_out_date date [not null]
+  booking_date timestamp [default: `now()`]
+  status string [not null, default: 'confirmed'] // pending_payment, confirmed, checked_in, checked_out, cancelled, no_show
+  total_amount decimal [not null]
+  discount_amount decimal [default: 0]
+  final_amount decimal [not null] // total_amount - discount_amount
+  discount_id string [ref: > discounts.id]
+  special_offer_id string [ref: > special_offers.id]
+  special_requests text
+  number_of_guests int
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  cancelled_at timestamp // ✅ ENHANCEMENT: Track cancellation time
+  cancelled_by string [ref: > administrators.id] // ✅ ENHANCEMENT: Who cancelled
+  cancellation_reason text
+  
+  Indexes {
+    guest_id
+    hotel_id
+    status
+    (check_in_date, check_out_date)
+  }
+  
+  Note: 'check_out_date must be > check_in_date'
+}
+
+// ✅ FIX: Enhanced booking_rooms with denormalized dates and tariff tracking
+Table booking_rooms [headercolor: #e74c3c] {
+  id string [pk]
+  booking_id string [ref: > bookings.id, not null]
+  room_id string [ref: > rooms.id, not null]
+  check_in_date date [not null] // ✅ DENORMALIZED: For easier availability queries
+  check_out_date date [not null] // ✅ DENORMALIZED: For easier availability queries
+  price_per_night decimal [not null] // ✅ ENHANCEMENT: Freezes the price at booking time
+  number_of_nights int [not null]
+  total_price decimal [not null] // price_per_night * number_of_nights
+  tariff_id string [ref: > tariffs.id] // ✅ ENHANCEMENT: Track which tariff was used
+  created_at timestamp [default: `now()`]
+  
+  Indexes {
+    booking_id
+    room_id
+    (room_id, check_in_date, check_out_date) // ✅ FIX: For double-booking prevention
+  }
+  
+  Note: 'Must validate no overlapping bookings for same room_id via application logic or triggers'
+}
+
+// --- PRICING & PROMOTIONS ---
+
+Table discounts [headercolor: #16a085] {
+  id string [pk]
+  code string [not null, unique] // ✅ FIX: Unique discount codes
+  description string
+  amount decimal [not null]
+  amount_type string [not null] // percentage, fixed
+  min_booking_amount decimal // Minimum booking value to apply discount
+  max_discount_amount decimal // Cap for percentage discounts
+  valid_from date [not null]
+  valid_to date [not null]
+  usage_limit int // Max number of times this code can be used
+  usage_count int [default: 0] // Track usage
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    code [unique]
+    (valid_from, valid_to)
+  }
+}
+
+Table special_offers [headercolor: #ffc0cb] {
+  id string [pk]
+  hotel_id string [ref: > hotels.id] // Null = applies to all hotels
+  room_type_id string [ref: > room_types.id] // Null = applies to all room types
+  name string [not null]
+  description text
+  discount_id string [ref: > discounts.id, not null]
+  valid_from date [not null]
+  valid_to date [not null]
+  min_nights int // Minimum nights to qualify
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    hotel_id
+    discount_id
+    (valid_from, valid_to)
+  }
+}
+
+// --- PAYMENT MANAGEMENT ---
+
+// ✅ ENHANCEMENT: Improved payment tracking
+Table payments [headercolor: #3498db] {
+  id string [pk]
+  booking_id string [ref: > bookings.id, not null]
+  payment_date timestamp [default: `now()`]
+  amount decimal [not null]
+  payment_method string [not null] // credit_card, debit_card, online_wallet, bank_transfer, cash
+  transaction_id string [unique] // ✅ FIX: Transaction IDs should be unique
+  status string [not null] // pending, processing, paid, failed, refunded, partially_refunded
+  failure_reason text
+  refund_id string [ref: > payments.id] // ✅ ENHANCEMENT: Link refunds to original payment
+  refund_amount decimal // Amount refunded if applicable
+  refund_date timestamp
+  gateway_name string // PayPal, Stripe, Razorpay, etc.
+  gateway_response text // JSON response from payment gateway
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    booking_id
+    transaction_id [unique]
+    status
+    (payment_date)
+  }
+}
+
+// ✅ NEW FEATURE: Reviews and Ratings
+Table reviews [headercolor: #ff6b6b] {
+  id string [pk]
+  booking_id string [ref: > bookings.id, not null]
+  guest_id string [ref: > guests.id, not null]
+  hotel_id string [ref: > hotels.id, not null]
+  room_type_id string [ref: > room_types.id]
+  rating int [not null] // 1-5
+  cleanliness_rating int // 1-5
+  service_rating int // 1-5
+  location_rating int // 1-5
+  value_rating int // 1-5
+  title string
+  comment text
+  response text // Hotel's response to review
+  response_by string [ref: > administrators.id]
+  response_date timestamp
+  is_verified boolean [default: false] // Verified stay
+  is_approved boolean [default: true] // Moderation status
+  helpful_count int [default: 0] // Number of users who found this helpful
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    booking_id [unique] // One review per booking
+    guest_id
+    hotel_id
+    rating
+    created_at
+  }
+  
+  Note: 'Guest can only review after check-out'
+}
+
+// ✅ NEW FEATURE: Enhanced room availability tracking
+Table room_availability_calendar [headercolor: #f39c12] {
+  id string [pk]
+  room_id string [ref: > rooms.id, not null]
+  date date [not null]
+  is_available boolean [default: true]
+  blocked_reason string // booking, maintenance, hold, management_block
+  booking_room_id string [ref: > booking_rooms.id] // Reference if blocked by booking
+  notes text
+  created_at timestamp [default: `now()`]
+  
+  Indexes {
+    (room_id, date) [unique] // ✅ FIX: One entry per room per date
+    room_id
+    date
+    is_available
+  }
+  
+  Note: 'Auto-populated from bookings and maintenance schedules'
+}
+
+// --- ADMINISTRATION ---
+
+Table administrators [headercolor: #95a5a6] {
+  id string [pk]
+  username string [not null, unique] // ✅ FIX: Unique username
+  password_hash string [not null]
+  email string [not null, unique] // ✅ FIX: Unique email
+  full_name string [not null]
+  role string [not null] // super_admin, hotel_admin, manager, staff
+  hotel_id string [ref: > hotels.id] // Null if super admin
+  permissions text // JSON array of permissions
+  is_active boolean [default: true]
+  last_login timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  created_by string [ref: > administrators.id]
+  
+  Indexes {
+    username [unique]
+    email [unique]
+    hotel_id
+  }
+}
+
+// --- AUDIT & LOGGING ---
+
+Table booking_status_history [headercolor: #34495e] {
+  id string [pk]
+  booking_id string [ref: > bookings.id, not null]
+  old_status string
+  new_status string [not null]
+  changed_by string [ref: > administrators.id]
+  changed_at timestamp [default: `now()`]
+  notes text
+  
+  Indexes {
+    booking_id
+    changed_at
+  }
+  
+  Note: 'Audit trail for all booking status changes'
+}
+
+Table room_maintenance_log [headercolor: #7f8c8d] {
+  id string [pk]
+  room_id string [ref: > rooms.id, not null]
+  maintenance_type string // routine, repair, deep_clean, renovation
+  start_date timestamp [not null]
+  end_date timestamp
+  description text
+  cost decimal
+  performed_by string
+  status string // scheduled, in_progress, completed, cancelled
+  created_by string [ref: > administrators.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    room_id
+    status
+    (start_date, end_date)
+  }
+}
+
+// --- ADDITIONAL ENHANCEMENTS ---
+
+Table guest_preferences [headercolor: #9b59b6] {
+  id string [pk]
+  guest_id string [ref: > guests.id, not null]
+  preferred_room_type string
+  preferred_floor string
+  smoking_preference boolean
+  bed_preference string
+  special_requirements text
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    guest_id [unique]
+  }
+}
+
+Table notification_preferences [headercolor: #e67e22] {
+  id string [pk]
+  guest_id string [ref: > guests.id, not null]
+  email_notifications boolean [default: true]
+  sms_notifications boolean [default: false]
+  promotional_emails boolean [default: true]
+  booking_reminders boolean [default: true]
+  updated_at timestamp [default: `now()`]
+  
+  Indexes {
+    guest_id [unique]
+  }
+}
+
+// --- RELATIONSHIPS SUMMARY ---
+// Hotels (1) → (N) Room Types
+// Hotels (1) → (N) Rooms
+// Hotels (1) → (N) Tariffs
+// Hotels (1) → (N) Special Offers
+// Hotels (1) → (N) Administrators
+// Hotels (1) → (N) Reviews
+
+// Room Types (1) → (N) Rooms
+// Room Types (1) → (N) Tariffs
+
+// Guests (1) → (N) Bookings
+// Guests (1) → (N) Reviews
+// Guests (1) → (1) Guest Preferences
+// Guests (1) → (1) Notification Preferences
+
+// Bookings (1) → (N) Booking Rooms
+// Bookings (1) → (N) Payments
+// Bookings (1) → (1) Reviews
+// Bookings (1) → (N) Booking Status History
+
+// Rooms (1) → (N) Booking Rooms
+// Rooms (1) → (N) Room Availability Calendar
+// Rooms (1) → (N) Room Maintenance Log
+
+// Discounts (1) → (N) Special Offers
+// Discounts (1) → (N) Bookings
+
+// Administrators (1) → (N) Reviews (responses)
+// Administrators (1) → (N) Bookings (cancellations)

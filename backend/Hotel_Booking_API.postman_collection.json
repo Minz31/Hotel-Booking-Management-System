@@ -1,0 +1,323 @@
+{
+    "info": {
+        "name": "Hotel Booking API",
+        "description": "Complete API endpoints for Hotel Booking System",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "🔐 Authentication",
+            "item": [
+                {
+                    "name": "Register Guest",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/auth/register",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"first_name\": \"Alice\",\n  \"last_name\": \"Johnson\",\n  \"email\": \"alice@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"+1-555-1001\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"password123\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get My Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{base_url}}/auth/me"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "🏨 Hotels",
+            "item": [
+                {
+                    "name": "Get All Hotels",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/hotels?city=New York&page=1&limit=10"
+                    }
+                },
+                {
+                    "name": "Get Hotel by ID",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/hotels/h1"
+                    }
+                },
+                {
+                    "name": "Get Hotel Room Types",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/hotels/h1/room-types"
+                    }
+                },
+                {
+                    "name": "Search Available Rooms",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/hotels/h1/available-rooms?check_in=2026-02-15&check_out=2026-02-20&guests=2"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "📅 Bookings",
+            "item": [
+                {
+                    "name": "Create Booking",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/bookings",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"guest_id\": \"g1\",\n  \"hotel_id\": \"h1\",\n  \"check_in_date\": \"2026-02-15\",\n  \"check_out_date\": \"2026-02-20\",\n  \"room_ids\": [\"r1\"],\n  \"number_of_guests\": 2,\n  \"discount_code\": \"WELCOME10\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Guest Bookings",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{base_url}}/bookings/guest/g1"
+                    }
+                },
+                {
+                    "name": "Get Booking by ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{base_url}}/bookings/booking_id_here"
+                    }
+                },
+                {
+                    "name": "Update Booking Status (Admin)",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/bookings/booking_id_here/status",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"checked_in\",\n  \"notes\": \"Guest arrived\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Booking",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/bookings/booking_id_here/cancel",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"reason\": \"Change of plans\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "💳 Payments",
+            "item": [
+                {
+                    "name": "Create Payment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/payments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"booking_id\": \"booking_id_here\",\n  \"amount\": 1575.00,\n  \"payment_method\": \"credit_card\",\n  \"transaction_id\": \"txn_stripe_abc123\",\n  \"gateway_name\": \"Stripe\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Booking Payments",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": "{{base_url}}/payments/booking/booking_id_here"
+                    }
+                },
+                {
+                    "name": "Process Refund (Admin)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/payments/payment_id_here/refund",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"refund_amount\": 1575.00,\n  \"reason\": \"Booking cancelled\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "⭐ Reviews",
+            "item": [
+                {
+                    "name": "Create Review",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/reviews",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"booking_id\": \"booking_id_here\",\n  \"rating\": 5,\n  \"cleanliness_rating\": 5,\n  \"service_rating\": 4,\n  \"location_rating\": 5,\n  \"value_rating\": 4,\n  \"title\": \"Excellent Stay!\",\n  \"comment\": \"Room was spotless and staff was very friendly.\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Hotel Reviews",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/reviews/hotel/h1?page=1&limit=10&sort=recent"
+                    }
+                },
+                {
+                    "name": "Add Hotel Response (Admin)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/reviews/review_id_here/response",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"response\": \"Thank you for your wonderful feedback!\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Mark Review Helpful",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/reviews/review_id_here/helpful"
+                    }
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:5000/api"
+        },
+        {
+            "key": "token",
+            "value": "your_jwt_token_here"
+        },
+        {
+            "key": "admin_token",
+            "value": "admin_jwt_token_here"
+        }
+    ]
+}
