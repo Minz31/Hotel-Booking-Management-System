@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaCalendar, FaUsers, FaHotel, FaBed, FaCheckCircle } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
@@ -11,6 +11,9 @@ const BookingPage = () => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
     const { currentBooking, clearBooking } = useBookingStore();
+
+    // Track if booking was just completed to prevent error toast
+    const bookingCompleted = useRef(false);
 
     const [formData, setFormData] = useState({
         checkIn: new Date(),
@@ -31,6 +34,11 @@ const BookingPage = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        // Don't show error if booking was just completed
+        if (bookingCompleted.current) {
+            return;
+        }
+
         if (!currentBooking) {
             toast.error('Please select a hotel and room first');
             navigate('/hotels');
@@ -87,6 +95,8 @@ const BookingPage = () => {
             const { data } = await bookingAPI.createBooking(bookingData);
 
             toast.success('Booking created successfully!');
+            // Mark booking as completed before clearing to prevent error toast
+            bookingCompleted.current = true;
             clearBooking();
             navigate(`/bookings/${data.data.id}`);
         } catch (error) {

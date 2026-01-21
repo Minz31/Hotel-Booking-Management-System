@@ -440,6 +440,7 @@ const ManageRoomsPage = () => {
                 onClose={() => setIsAddTariffModalOpen(false)}
                 onSuccess={fetchRoomData}
                 roomTypes={roomTypes}
+                hotelId={hotelId}
             />
         </div>
     );

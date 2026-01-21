@@ -128,7 +128,7 @@ const getRooms = async (req, res, next) => {
                  AND CURDATE() BETWEEN b.check_in_date AND b.check_out_date) as is_currently_booked
             FROM rooms r
             JOIN room_types rt ON r.room_type_id = rt.id
-            WHERE r.hotel_id = ?
+            WHERE r.hotel_id = ? AND r.is_active = TRUE
             ORDER BY r.floor, r.room_number`,
             [hotelId]
         );
@@ -152,7 +152,7 @@ const createRoom = async (req, res, next) => {
         const roomId = uuidv4();
 
         await pool.query(
-            `INSERT INTO rooms (id, hotel_id, room_type_id, room_number, floor, description, is_active)
+            `INSERT INTO rooms (id, hotel_id, room_type_id, room_number, floor, notes, is_active)
             VALUES (?, ?, ?, ?, ?, ?, TRUE)`,
             [roomId, hotel_id, room_type_id, room_number, floor, description]
         );
@@ -179,7 +179,7 @@ const updateRoom = async (req, res, next) => {
 
         await pool.query(
             `UPDATE rooms SET 
-                room_number = ?, floor = ?, description = ?, is_active = ?
+                room_number = ?, floor = ?, notes = ?, is_active = ?
             WHERE id = ?`,
             [room_number, floor, description, is_active, id]
         );
@@ -200,22 +200,25 @@ const deleteRoom = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        // Check for active bookings
+        // Check for active or future bookings
         const [bookings] = await pool.query(
             `SELECT COUNT(*) as count FROM booking_rooms br
             JOIN bookings b ON br.booking_id = b.id
-            WHERE br.room_id = ? AND b.status IN ('confirmed', 'checked_in')`,
+            WHERE br.room_id = ? 
+            AND b.status IN ('confirmed', 'checked_in')
+            AND b.check_out_date >= CURDATE()`,
             [id]
         );
 
         if (bookings[0].count > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Cannot delete room with active bookings'
+                message: 'Cannot delete room with active or future bookings'
             });
         }
 
-        await pool.query('DELETE FROM rooms WHERE id = ?', [id]);
+        // Soft delete the room
+        await pool.query('UPDATE rooms SET is_active = FALSE WHERE id = ?', [id]);
 
         res.json({
             success: true,
@@ -256,16 +259,19 @@ const getTariffs = async (req, res, next) => {
 // @desc    Create tariff
 // @route   POST /api/rooms/tariffs
 // @access  Private (Admin)
+// @desc    Create tariff
+// @route   POST /api/rooms/tariffs
+// @access  Private (Admin)
 const createTariff = async (req, res, next) => {
     try {
-        const { room_type_id, price, start_date, end_date, season_name } = req.body;
+        const { hotel_id, room_type_id, price, start_date, end_date, season_name } = req.body;
 
         const tariffId = uuidv4();
 
         await pool.query(
-            `INSERT INTO tariffs (id, room_type_id, price, start_date, end_date, season_name)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-            [tariffId, room_type_id, price, start_date, end_date, season_name]
+            `INSERT INTO tariffs (id, hotel_id, room_type_id, price, start_date, end_date, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [tariffId, hotel_id, room_type_id, price, start_date, end_date, season_name]
         );
 
         res.status(201).json({
@@ -287,7 +293,7 @@ const updateTariff = async (req, res, next) => {
 
         await pool.query(
             `UPDATE tariffs SET 
-                price = ?, start_date = ?, end_date = ?, season_name = ?
+                price = ?, start_date = ?, end_date = ?, description = ?
             WHERE id = ?`,
             [price, start_date, end_date, season_name, id]
         );
@@ -324,31 +330,38 @@ const deleteTariff = async (req, res, next) => {
 // @desc    Get availability calendar
 // @route   GET /api/rooms/availability/:hotelId
 // @access  Public
+// @desc    Get availability calendar
+// @route   GET /api/rooms/availability/:hotelId
+// @access  Public
 const getAvailabilityCalendar = async (req, res, next) => {
     try {
         const { hotelId } = req.params;
         const { start_date, end_date } = req.query;
 
+        // Use a derived table to filter bookings first, preventing duplicates from past bookings
+        // Overlap logic: Booking starts before search ends AND Booking ends after search starts
         const [availability] = await pool.query(
             `SELECT 
                 r.id, r.room_number, r.floor,
                 rt.name as type_name,
-                br.booking_id,
-                b.check_in_date,
-                b.check_out_date,
-                b.status,
+                ab.booking_id,
+                ab.check_in_date,
+                ab.check_out_date,
+                ab.status,
                 CONCAT(g.first_name, ' ', g.last_name) as guest_name
             FROM rooms r
             JOIN room_types rt ON r.room_type_id = rt.id
-            LEFT JOIN booking_rooms br ON r.id = br.room_id
-            LEFT JOIN bookings b ON br.booking_id = b.id AND b.status IN ('confirmed', 'checked_in')
-                AND ((b.check_in_date BETWEEN ? AND ?) 
-                OR (b.check_out_date BETWEEN ? AND ?)
-                OR (b.check_in_date <= ? AND b.check_out_date >= ?))
-            LEFT JOIN guests g ON b.guest_id = g.id
+            LEFT JOIN (
+                SELECT br.room_id, b.id as booking_id, b.check_in_date, b.check_out_date, b.status, b.guest_id
+                FROM booking_rooms br
+                JOIN bookings b ON br.booking_id = b.id
+                WHERE b.status IN ('confirmed', 'checked_in')
+                AND (b.check_in_date <= ? AND b.check_out_date >= ?)
+            ) ab ON r.id = ab.room_id
+            LEFT JOIN guests g ON ab.guest_id = g.id
             WHERE r.hotel_id = ? AND r.is_active = TRUE
             ORDER BY r.floor, r.room_number`,
-            [start_date, end_date, start_date, end_date, start_date, end_date, hotelId]
+            [end_date, start_date, hotelId]
         );
 
         res.json({

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FaEdit, FaTrash, FaPlus, FaDoorOpen } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaDoorOpen, FaStar } from 'react-icons/fa';
 import { hotelAPI } from '../../services/api';
 import { useAuthStore } from '../../store';
 import toast from 'react-hot-toast';

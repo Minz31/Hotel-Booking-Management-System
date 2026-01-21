@@ -6,7 +6,8 @@ const {
     getGuestBookings,
     getBookingById,
     updateBookingStatus,
-    cancelBooking
+    cancelBooking,
+    changeRoom
 } = require('../controllers/bookingController');
 const { verifyToken, isAdmin } = require('../middleware/auth');
 const { validateBooking } = require('../middleware/validation');
@@ -19,6 +20,8 @@ router.get('/', isAdmin, getAllBookings); // Admin: Get all bookings
 router.get('/guest/:guestId', getGuestBookings);
 router.get('/:id', getBookingById);
 router.patch('/:id/status', isAdmin, updateBookingStatus);
+router.patch('/:id/room', isAdmin, changeRoom); // Admin: Change room allocation
 router.post('/:id/cancel', cancelBooking);
 
 module.exports = router;
+

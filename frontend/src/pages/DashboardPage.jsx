@@ -56,6 +56,21 @@ const DashboardPage = () => {
         });
     };
 
+    const handleCancel = async (bookingId) => {
+        if (!confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await bookingAPI.cancelBooking(bookingId, { reason: 'Cancelled by user' });
+            toast.success('Booking cancelled successfully');
+            fetchBookings();
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.message || 'Failed to cancel booking');
+        }
+    };
+
     if (!user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -178,12 +193,22 @@ const DashboardPage = () => {
                                             <div className="text-sm text-gray-600">
                                                 Rooms: {booking.room_numbers || 'N/A'} • Guests: {booking.number_of_guests || 0}
                                             </div>
-                                            <Link
-                                                to={`/bookings/${booking.id}`}
-                                                className="text-primary-600 hover:text-primary-700 font-medium"
-                                            >
-                                                View Details →
-                                            </Link>
+                                            <div className="flex gap-4">
+                                                {['pending_payment', 'confirmed'].includes(booking.status) && (
+                                                    <button
+                                                        onClick={() => handleCancel(booking.id)}
+                                                        className="text-red-600 hover:text-red-700 font-medium"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                )}
+                                                <Link
+                                                    to={`/bookings/${booking.id}`}
+                                                    className="text-primary-600 hover:text-primary-700 font-medium"
+                                                >
+                                                    View Details →
+                                                </Link>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}

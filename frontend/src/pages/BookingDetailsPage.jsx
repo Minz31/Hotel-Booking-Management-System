@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaCheckCircle, FaCalendar, FaHotel, FaUser, FaBed, FaPrint } from 'react-icons/fa';
+import { FaCheckCircle, FaCalendar, FaHotel, FaUser, FaBed, FaPrint, FaCreditCard } from 'react-icons/fa';
 import { bookingAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import PaymentModal from '../components/payment/PaymentModal';
 
 const BookingDetailsPage = () => {
     const { id } = useParams();
     const [booking, setBooking] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     useEffect(() => {
         fetchBookingDetails();
@@ -76,11 +78,23 @@ const BookingDetailsPage = () => {
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Success Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
-                        <FaCheckCircle className="text-green-600 text-4xl" />
-                    </div>
-                    <h1 className="text-4xl font-bold mb-2">Booking Confirmed!</h1>
-                    <p className="text-gray-600">Thank you for your reservation</p>
+                    {booking.status === 'confirmed' ? (
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
+                            <FaCheckCircle className="text-green-600 text-4xl" />
+                        </div>
+                    ) : (
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
+                            <FaHotel className="text-blue-600 text-4xl" />
+                        </div>
+                    )}
+                    <h1 className="text-4xl font-bold mb-2">
+                        {booking.status === 'confirmed' ? 'Booking Confirmed!' : 'Booking Created'}
+                    </h1>
+                    <p className="text-gray-600">
+                        {booking.status === 'pending_payment'
+                            ? 'Please complete payment to confirm your reservation'
+                            : 'Thank you for your reservation'}
+                    </p>
                 </div>
 
                 {/* Booking Details Card */}
@@ -186,6 +200,15 @@ const BookingDetailsPage = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-4 justify-center">
+                    {booking.status === 'pending_payment' && (
+                        <button
+                            onClick={() => setIsPaymentModalOpen(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white btn-primary flex items-center gap-2 animate-pulse"
+                        >
+                            <FaCreditCard />
+                            Pay Now
+                        </button>
+                    )}
                     <button
                         onClick={handlePrint}
                         className="btn-secondary flex items-center gap-2"
@@ -203,12 +226,26 @@ const BookingDetailsPage = () => {
                     <h3 className="font-bold mb-3">Important Information</h3>
                     <ul className="space-y-2 text-sm text-gray-700">
                         <li>✓ Please bring a valid ID at check-in</li>
-                        <li>✓ Payment will be collected at the hotel</li>
+                        {booking.status === 'pending_payment' ? (
+                            <li className="font-bold text-red-600">⚠ Payment is required to confirm this booking</li>
+                        ) : (
+                            <li>✓ Payment verified</li>
+                        )}
                         <li>✓ Free cancellation up to 24 hours before check-in</li>
                         <li>✓ For any changes, please contact the hotel directly</li>
                     </ul>
                 </div>
             </div>
+
+            <PaymentModal
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                booking={booking}
+                onSuccess={() => {
+                    setIsPaymentModalOpen(false);
+                    fetchBookingDetails(); // Refresh to see updated status
+                }}
+            />
         </div>
     );
 };

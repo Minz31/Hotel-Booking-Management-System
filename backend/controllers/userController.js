@@ -5,47 +5,93 @@ const { v4: uuidv4 } = require('uuid');
 // @desc    Get all users (administrators)
 // @route   GET /api/users
 // @access  Private (Admin)
+// @desc    Get all users (administrators & guests)
+// @route   GET /api/users
+// @access  Private (Admin)
 const getAllUsers = async (req, res, next) => {
     try {
         const { role, hotel_id, search } = req.query;
+        let users = [];
 
-        // Get administrators only (guests can be added later if needed)
-        let query = `
-            SELECT 
-                id, full_name, email, created_at,
-                role, hotel_id, username
-            FROM administrators
-            WHERE 1=1
-        `;
+        // 1. Fetch Guests
+        if (!role || role === 'all' || role === 'guest') {
+            let guestQuery = `
+                SELECT 
+                    id, first_name, last_name, email, phone, 'guest' as role, registration_date as created_at
+                FROM guests
+                WHERE 1=1
+            `;
+            const guestParams = [];
 
-        const params = [];
+            if (search) {
+                guestQuery += ` AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)`;
+                guestParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            }
 
-        if (search) {
-            query += ` AND (full_name LIKE ? OR email LIKE ? OR username LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-        }
+            // Guests don't have hotel_id, so if filtering by hotel_id, strictly speaking guests shouldn't return 
+            // UNLESS we consider guests to be global. For now, let's include them unless role='hotel_admin'.
+            // But if specific hotel_id is requested for filtering USERS, guests aren't linked to hotels directly.
+            // So we'll skip hotel_id filter for guests.
 
-        if (hotel_id) {
-            query += ` AND hotel_id = ?`;
-            params.push(hotel_id);
-        }
+            guestQuery += ' ORDER BY registration_date DESC LIMIT 50'; // Limit results
 
-        if (role && role !== 'all' && role !== 'guest') {
-            query += ` AND role = ?`;
-            params.push(role);
-        }
-
-        query += ' ORDER BY created_at DESC';
-
-        const [users] = await pool.query(query, params);
-
-        // Get hotel names for admins
-        for (let user of users) {
-            if (user.hotel_id) {
-                const [hotels] = await pool.query('SELECT name FROM hotels WHERE id = ?', [user.hotel_id]);
-                user.hotel_name = hotels[0]?.name || null;
+            try {
+                const [guests] = await pool.query(guestQuery, guestParams);
+                console.log(`Found ${guests.length} guests matching search: "${search}"`);
+                users = [...users, ...guests];
+            } catch (guestError) {
+                console.error('Error fetching guests:', guestError);
+                // Continue to fetch admins even if guests query fails
             }
         }
+
+        // 2. Fetch Administrators
+        if (!role || role === 'all' || ['hotel_admin', 'super_admin', 'manager'].includes(role)) {
+            let adminQuery = `
+                SELECT 
+                    id, full_name, email, created_at,
+                    role, hotel_id, username
+                FROM administrators
+                WHERE 1=1
+            `;
+            const adminParams = [];
+
+            if (search) {
+                adminQuery += ` AND (full_name LIKE ? OR email LIKE ? OR username LIKE ?)`;
+                adminParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            }
+
+            if (hotel_id) {
+                adminQuery += ` AND hotel_id = ?`;
+                adminParams.push(hotel_id);
+            }
+
+            if (role && role !== 'all') {
+                adminQuery += ` AND role = ?`;
+                adminParams.push(role);
+            }
+
+            adminQuery += ' ORDER BY created_at DESC LIMIT 50';
+            const [admins] = await pool.query(adminQuery, adminParams);
+
+            // Fetch hotel names and normalize names
+            for (let admin of admins) {
+                if (admin.hotel_id) {
+                    const [hotels] = await pool.query('SELECT name FROM hotels WHERE id = ?', [admin.hotel_id]);
+                    admin.hotel_name = hotels[0]?.name || null;
+                }
+                // Normalize name for frontend consistency
+                if (admin.full_name) {
+                    const parts = admin.full_name.split(' ');
+                    admin.first_name = parts[0];
+                    admin.last_name = parts.slice(1).join(' ');
+                }
+            }
+            users = [...users, ...admins];
+        }
+
+        // Sort combined results by created_at desc (approximate merging)
+        users.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
         res.json({
             success: true,

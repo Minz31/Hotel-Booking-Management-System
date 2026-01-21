@@ -21,10 +21,14 @@ import ManageHotelsPage from './pages/admin/ManageHotelsPage';
 import ViewBookingsPage from './pages/admin/ViewBookingsPage';
 import ManageUsersPage from './pages/admin/ManageUsersPage';
 import ManageRoomsPage from './pages/admin/ManageRoomsPage';
+import ManageReviewsPage from './pages/admin/ManageReviewsPage';
+import ManagePaymentsPage from './pages/admin/ManagePaymentsPage';
+import CreateBookingPage from './pages/admin/CreateBookingPage';
 
 // Protected Route
 import ProtectedRoute from './components/ProtectedRoute';
 import GuestRoute from './components/GuestRoute';
+import SuperAdminRoute from './components/SuperAdminRoute';
 
 function App() {
     return (
@@ -92,11 +96,19 @@ function App() {
                             }
                         />
                         <Route
-                            path="/admin/users"
+                            path="/admin/bookings/new"
                             element={
                                 <ProtectedRoute>
-                                    <ManageUsersPage />
+                                    <CreateBookingPage />
                                 </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/admin/users"
+                            element={
+                                <SuperAdminRoute>
+                                    <ManageUsersPage />
+                                </SuperAdminRoute>
                             }
                         />
                         <Route
@@ -104,6 +116,22 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <ManageRoomsPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/admin/reviews/:hotelId"
+                            element={
+                                <ProtectedRoute>
+                                    <ManageReviewsPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/admin/payments"
+                            element={
+                                <ProtectedRoute>
+                                    <ManagePaymentsPage />
                                 </ProtectedRoute>
                             }
                         />

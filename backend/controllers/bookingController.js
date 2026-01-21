@@ -16,7 +16,7 @@ const createBooking = async (req, res, next) => {
             hotel_id,
             check_in_date,
             check_out_date,
-            room_ids,
+            room_ids,        // Can be actual room IDs (r1, r2) OR room type IDs (rt1, rt2)
             number_of_guests,
             special_requests,
             discount_code
@@ -31,8 +31,50 @@ const createBooking = async (req, res, next) => {
             throw new Error('Check-out must be after check-in');
         }
 
-        // Check room availability
-        for (const roomId of room_ids) {
+        // Resolve room IDs - if they are room_type_ids, find available rooms
+        const resolvedRoomIds = [];
+        for (const id of room_ids) {
+            // Check if this is a room_type_id (starts with 'rt') or actual room_id
+            const [roomTypeCheck] = await connection.query(
+                'SELECT id FROM room_types WHERE id = ?',
+                [id]
+            );
+
+            if (roomTypeCheck.length > 0) {
+                // It's a room type ID - find an available room of this type
+                const [availableRooms] = await connection.query(
+                    `SELECT r.id 
+                     FROM rooms r
+                     WHERE r.room_type_id = ?
+                       AND r.hotel_id = ?
+                       AND r.status = 'available'
+                       AND r.id NOT IN (
+                           SELECT br.room_id 
+                           FROM booking_rooms br
+                           JOIN bookings b ON br.booking_id = b.id
+                           WHERE b.status NOT IN ('cancelled', 'no_show')
+                             AND NOT (br.check_out_date <= ? OR br.check_in_date >= ?)
+                       )
+                     LIMIT 1`,
+                    [id, hotel_id, check_in_date, check_out_date]
+                );
+
+                if (availableRooms.length === 0) {
+                    await connection.rollback();
+                    return res.status(409).json({
+                        success: false,
+                        message: `No available rooms for the selected room type and dates`
+                    });
+                }
+                resolvedRoomIds.push(availableRooms[0].id);
+            } else {
+                // It's an actual room ID
+                resolvedRoomIds.push(id);
+            }
+        }
+
+        // Check room availability for resolved room IDs
+        for (const roomId of resolvedRoomIds) {
             const [conflicts] = await connection.query(
                 `SELECT COUNT(*) AS conflicts
          FROM booking_rooms br
@@ -56,9 +98,9 @@ const createBooking = async (req, res, next) => {
         let totalAmount = 0;
         const bookingRooms = [];
 
-        for (const roomId of room_ids) {
+        for (const roomId of resolvedRoomIds) {
             const [roomData] = await connection.query(
-                `SELECT r.*, rt.id AS room_type_id, t.price, t.id AS tariff_id
+                `SELECT r.*, rt.id AS room_type_id, rt.base_price, t.price, t.id AS tariff_id
          FROM rooms r
          JOIN room_types rt ON r.room_type_id = rt.id
          LEFT JOIN tariffs t ON rt.id = t.room_type_id
@@ -76,7 +118,8 @@ const createBooking = async (req, res, next) => {
             }
 
             const room = roomData[0];
-            const pricePerNight = room.price || 0;
+            // Use tariff price if available, otherwise use base_price from room_types
+            const pricePerNight = room.price || room.base_price || 0;
             const roomTotal = pricePerNight * nights;
             totalAmount += roomTotal;
 
@@ -407,6 +450,12 @@ const cancelBooking = async (req, res, next) => {
         const { id } = req.params;
         const { reason } = req.body;
 
+        // Determine who is cancelling
+        // If guest, valid "cancelled_by" might differ or be null if current schema only links to admins
+        // Assuming 'cancelled_by' tracks admins/staff. Guests might not satisfy the FK constraint.
+        const cancelledBy = req.user.role === 'guest' ? null : req.user.id;
+        const finalReason = req.user.role === 'guest' ? `Cancelled by guest: ${reason || 'No reason provided'}` : reason;
+
         await pool.query(
             `UPDATE bookings 
        SET status = 'cancelled', 
@@ -414,7 +463,7 @@ const cancelBooking = async (req, res, next) => {
            cancelled_by = ?,
            cancellation_reason = ?
        WHERE id = ?`,
-            [req.user.id, reason, id]
+            [cancelledBy, finalReason, id]
         );
 
         res.json({
@@ -426,11 +475,131 @@ const cancelBooking = async (req, res, next) => {
     }
 };
 
+// @desc    Change room for a booking
+// @route   PATCH /api/bookings/:id/room
+// @access  Private (Admin)
+const changeRoom = async (req, res, next) => {
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const { id } = req.params;
+        const { new_room_id } = req.body;
+
+        // Get booking details
+        const [[booking]] = await connection.query(
+            'SELECT * FROM bookings WHERE id = ?',
+            [id]
+        );
+
+        if (!booking) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found'
+            });
+        }
+
+        // Check if new room is available
+        const [[newRoom]] = await connection.query(
+            'SELECT * FROM rooms WHERE id = ?',
+            [new_room_id]
+        );
+
+        if (!newRoom) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'New room not found'
+            });
+        }
+
+        if (newRoom.status !== 'available') {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: 'Selected room is not available'
+            });
+        }
+
+        // Get current room(s) from booking
+        const [currentRooms] = await connection.query(
+            'SELECT room_id FROM booking_rooms WHERE booking_id = ?',
+            [id]
+        );
+
+        // Update old room(s) status to available
+        for (const room of currentRooms) {
+            await connection.query(
+                "UPDATE rooms SET status = 'available' WHERE id = ?",
+                [room.room_id]
+            );
+        }
+
+        // Get room type and pricing info for new room
+        const [[roomData]] = await connection.query(
+            `SELECT r.*, rt.id AS room_type_id, rt.base_price, t.price, t.id AS tariff_id
+             FROM rooms r
+             JOIN room_types rt ON r.room_type_id = rt.id
+             LEFT JOIN tariffs t ON rt.id = t.room_type_id
+               AND CURDATE() BETWEEN t.start_date AND t.end_date
+             WHERE r.id = ?`,
+            [new_room_id]
+        );
+
+        const pricePerNight = roomData.price || roomData.base_price || 0;
+
+        // Update booking_rooms - replace first room (for single room bookings)
+        if (currentRooms.length > 0) {
+            await connection.query(
+                `UPDATE booking_rooms 
+                 SET room_id = ?, price_per_night = ?, tariff_id = ?
+                 WHERE booking_id = ? AND room_id = ?`,
+                [new_room_id, pricePerNight, roomData.tariff_id, id, currentRooms[0].room_id]
+            );
+        }
+
+        // Update new room status if checked in
+        if (booking.status === 'checked_in') {
+            await connection.query(
+                "UPDATE rooms SET status = 'occupied' WHERE id = ?",
+                [new_room_id]
+            );
+        }
+
+        // Recalculate total if price changed
+        const [bookingRooms] = await connection.query(
+            'SELECT SUM(total_price) as total FROM booking_rooms WHERE booking_id = ?',
+            [id]
+        );
+
+        const newTotal = bookingRooms[0].total || 0;
+        await connection.query(
+            'UPDATE bookings SET total_amount = ?, final_amount = total_amount - discount_amount WHERE id = ?',
+            [newTotal, id]
+        );
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            message: 'Room changed successfully'
+        });
+    } catch (error) {
+        await connection.rollback();
+        next(error);
+    } finally {
+        connection.release();
+    }
+};
+
 module.exports = {
     createBooking,
     getAllBookings,
     getGuestBookings,
     getBookingById,
     updateBookingStatus,
-    cancelBooking
+    cancelBooking,
+    changeRoom
 };

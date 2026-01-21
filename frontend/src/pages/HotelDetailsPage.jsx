@@ -4,6 +4,7 @@ import { FaStar, FaMapMarkerAlt, FaPhone, FaEnvelope, FaWifi, FaParking, FaSwimm
 import { hotelAPI } from '../services/api';
 import { useBookingStore, useAuthStore } from '../store';
 import toast from 'react-hot-toast';
+import ReviewsList from '../components/reviews/ReviewsList';
 
 const HotelDetailsPage = () => {
     const { id } = useParams();
@@ -128,6 +129,7 @@ const HotelDetailsPage = () => {
                             </div>
                         </div>
 
+
                         {/* Room Types */}
                         <div>
                             <h2 className="text-2xl font-bold mb-6">Available Rooms</h2>
@@ -177,6 +179,10 @@ const HotelDetailsPage = () => {
                                     ))
                                 )}
                             </div>
+                        </div>
+                        {/* Reviews */}
+                        <div className="card p-6">
+                            <ReviewsList hotelId={id} hotelName={hotel.name} />
                         </div>
                     </div>
 

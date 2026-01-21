@@ -190,9 +190,45 @@ const markHelpful = async (req, res, next) => {
     }
 };
 
+// @desc    Delete review
+// @route   DELETE /api/reviews/:id
+// @access  Private (Admin)
+const deleteReview = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        // Check if review exists
+        const [[review]] = await pool.query('SELECT * FROM reviews WHERE id = ?', [id]);
+
+        if (!review) {
+            return res.status(404).json({
+                success: false,
+                message: 'Review not found'
+            });
+        }
+
+        if (req.user.role === 'hotel_admin' && req.user.hotel_id !== review.hotel_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to delete this review'
+            });
+        }
+
+        await pool.query('DELETE FROM reviews WHERE id = ?', [id]);
+
+        res.json({
+            success: true,
+            message: 'Review deleted successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createReview,
     getHotelReviews,
     addHotelResponse,
-    markHelpful
+    markHelpful,
+    deleteReview
 };

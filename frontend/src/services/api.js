@@ -51,6 +51,7 @@ export const hotelAPI = {
     updateHotel: (id, data) => api.put(`/hotels/${id}`, data),
     deleteHotel: (id) => api.delete(`/hotels/${id}`),
     getRoomTypes: (hotelId) => api.get(`/hotels/${hotelId}/room-types`),
+    getRooms: (hotelId) => api.get(`/rooms/${hotelId}`),
     searchAvailableRooms: (hotelId, params) =>
         api.get(`/hotels/${hotelId}/available-rooms`, { params }),
 };
@@ -62,13 +63,17 @@ export const bookingAPI = {
     getGuestBookings: (guestId, params) =>
         api.get(`/bookings/guest/${guestId}`, { params }),
     getBookingById: (id) => api.get(`/bookings/${id}`),
+    updateBookingStatus: (id, data) => api.patch(`/bookings/${id}/status`, data),
     cancelBooking: (id, data) => api.post(`/bookings/${id}/cancel`, data),
+    changeRoom: (id, data) => api.patch(`/bookings/${id}/room`, data),
 };
 
 // Payment APIs
 export const paymentAPI = {
+    getAllPayments: (params) => api.get('/payments', { params }),
     createPayment: (data) => api.post('/payments', data),
     getBookingPayments: (bookingId) => api.get(`/payments/booking/${bookingId}`),
+    processRefund: (id) => api.post(`/payments/${id}/refund`),
 };
 
 // Review APIs
@@ -76,6 +81,8 @@ export const reviewAPI = {
     createReview: (data) => api.post('/reviews', data),
     getHotelReviews: (hotelId, params) =>
         api.get(`/reviews/hotel/${hotelId}`, { params }),
+    addHotelResponse: (reviewId, response) => api.post(`/reviews/${reviewId}/response`, { response }),
+    deleteReview: (reviewId) => api.delete(`/reviews/${reviewId}`),
     markHelpful: (reviewId) => api.post(`/reviews/${reviewId}/helpful`),
 };
 
@@ -109,7 +116,14 @@ export const roomAPI = {
     deleteTariff: (id) => api.delete(`/rooms/tariffs/${id}`),
 
     // Availability
+    // Availability
     getAvailability: (hotelId, params) => api.get(`/rooms/availability/${hotelId}`, { params })
+};
+
+// Admin Dashboard APIs
+export const adminAPI = {
+    getDashboardStats: () => api.get('/dashboard/stats'),
+    getRecentActivity: () => api.get('/dashboard/activity'),
 };
 
 export default api;

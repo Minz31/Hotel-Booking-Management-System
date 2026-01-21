@@ -3,7 +3,7 @@ import { FaTimes } from 'react-icons/fa';
 import { roomAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
-const AddTariffModal = ({ isOpen, onClose, onSuccess, roomTypes }) => {
+const AddTariffModal = ({ isOpen, onClose, onSuccess, roomTypes, hotelId }) => {
     const [formData, setFormData] = useState({
         room_type_id: '',
         price: '',
@@ -24,7 +24,7 @@ const AddTariffModal = ({ isOpen, onClose, onSuccess, roomTypes }) => {
         setLoading(true);
 
         try {
-            await roomAPI.createTariff(formData);
+            await roomAPI.createTariff({ ...formData, hotel_id: hotelId });
             toast.success('Pricing created successfully!');
             onSuccess();
             onClose();
