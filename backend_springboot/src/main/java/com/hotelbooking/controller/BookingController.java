@@ -2,54 +2,61 @@ package com.hotelbooking.controller;
 
 import com.hotelbooking.dto.ApiResponse;
 import com.hotelbooking.dto.CreateBookingRequest;
-import com.hotelbooking.model.Booking;
 import com.hotelbooking.service.BookingService;
+import com.hotelbooking.security.CustomUserDetails;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import com.hotelbooking.security.CustomUserDetails;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings")
-@CrossOrigin(origins = "*")
 public class BookingController {
 
     @Autowired
     private BookingService bookingService;
 
     @GetMapping
-    public ApiResponse<List<Booking>> getAllBookings() {
-        return ApiResponse.success(bookingService.getAllBookings());
+    public ApiResponse<List<Map<String, Object>>> getAllBookings(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String hotel_id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        String hotelId = hotel_id;
+        // Hotel admins can only see their hotel's bookings
+        if (userDetails != null && "hotel_admin".equals(userDetails.getRole())) {
+            hotelId = userDetails.getHotelId();
+        }
+        return ApiResponse.success(bookingService.getAllBookings(status, hotelId));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Booking>> getBookingById(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getBookingById(@PathVariable String id) {
         return bookingService.getBookingById(id)
                 .map(b -> ResponseEntity.ok(ApiResponse.success(b)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/guest/{guestId}")
-    public ApiResponse<List<Booking>> getGuestBookings(@PathVariable String guestId) {
-        return ApiResponse.success(bookingService.getBookingsByGuest(guestId));
+    public ApiResponse<List<Map<String, Object>>> getGuestBookings(
+            @PathVariable String guestId,
+            @RequestParam(required = false) String status) {
+        return ApiResponse.success(bookingService.getBookingsByGuest(guestId, status));
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<Booking>> createBooking(@RequestBody CreateBookingRequest request,
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createBooking(
+            @RequestBody CreateBookingRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        // Enforce that guest_id matches logged in user if user is a guest
-        // If user is null (shouldn't be, protected), maybe throw
-        if (userDetails != null && userDetails.getRole().equals("guest")) {
-            // Force guest_id to be the logged in user's ID
+        // Force guest_id to be the logged-in user's ID for guests
+        if (userDetails != null && "guest".equals(userDetails.getRole())) {
             request.setGuest_id(userDetails.getId());
         }
 
         try {
-            Booking booking = bookingService.createBooking(request);
+            Map<String, Object> booking = bookingService.createBooking(request);
             return ResponseEntity.status(201).body(ApiResponse.success(booking, "Booking created successfully"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(409).body(ApiResponse.error(e.getMessage()));
@@ -57,12 +64,31 @@ public class BookingController {
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<ApiResponse<Booking>> updateBookingStatus(@PathVariable String id,
-            @RequestBody String status) {
+    public ResponseEntity<ApiResponse<Object>> updateBookingStatus(
+            @PathVariable String id,
+            @RequestBody Map<String, String> payload,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
         try {
-            return ResponseEntity.ok(ApiResponse.success(bookingService.updateBookingStatus(id, status)));
+            String status = payload.get("status");
+            String notes = payload.get("notes");
+            bookingService.updateBookingStatus(id, status, notes, userDetails != null ? userDetails.getId() : null);
+            return ResponseEntity.ok(ApiResponse.success(null, "Booking status updated successfully"));
         } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<Object>> cancelBooking(
+            @PathVariable String id,
+            @RequestBody Map<String, String> payload,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        try {
+            String reason = payload.get("reason");
+            bookingService.cancelBooking(id, reason, userDetails);
+            return ResponseEntity.ok(ApiResponse.success(null, "Booking cancelled successfully"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
 }

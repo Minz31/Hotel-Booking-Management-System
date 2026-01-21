@@ -24,36 +24,46 @@ public class CustomUserDetailsService implements UserDetailsService {
     private AdministratorRepository administratorRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        // 1. Check Guest
-        Optional<Guest> guest = guestRepository.findByEmail(email);
+    public UserDetails loadUserByUsername(String identifier) throws UsernameNotFoundException {
+        // 1. Check Guest by email
+        Optional<Guest> guest = guestRepository.findByEmail(identifier);
         if (guest.isPresent()) {
             return new CustomUserDetails(
                     guest.get().getId(),
                     guest.get().getEmail(),
-                    guest.get().getPasswordHash(), // Might be null if legacy
+                    guest.get().getPasswordHash(),
                     Collections.singletonList(new SimpleGrantedAuthority("ROLE_GUEST")),
                     null,
                     "guest");
         }
 
-        // 2. Check Administrator
-        Optional<Administrator> admin = administratorRepository.findByEmail(email);
+        // 2. Check Administrator by email
+        Optional<Administrator> admin = administratorRepository.findByEmail(identifier);
         if (admin.isPresent()) {
-            String role = admin.get().getRole().toUpperCase(); // e.g., HOTEL_ADMIN -> ROLE_HOTEL_ADMIN
-            if (!role.startsWith("ROLE_")) {
-                role = "ROLE_" + role;
-            }
-
-            return new CustomUserDetails(
-                    admin.get().getId(),
-                    admin.get().getEmail(),
-                    admin.get().getPasswordHash(),
-                    Collections.singletonList(new SimpleGrantedAuthority(role)),
-                    admin.get().getHotelId(),
-                    admin.get().getRole());
+            return buildAdminUserDetails(admin.get());
         }
 
-        throw new UsernameNotFoundException("User not found with email: " + email);
+        // 3. Check Administrator by username (fallback for Express tokens)
+        Optional<Administrator> adminByUsername = administratorRepository.findByUsername(identifier);
+        if (adminByUsername.isPresent()) {
+            return buildAdminUserDetails(adminByUsername.get());
+        }
+
+        throw new UsernameNotFoundException("User not found with identifier: " + identifier);
+    }
+
+    private CustomUserDetails buildAdminUserDetails(Administrator admin) {
+        String role = admin.getRole().toUpperCase();
+        if (!role.startsWith("ROLE_")) {
+            role = "ROLE_" + role;
+        }
+
+        return new CustomUserDetails(
+                admin.getId(),
+                admin.getEmail(),
+                admin.getPasswordHash(),
+                Collections.singletonList(new SimpleGrantedAuthority(role)),
+                admin.getHotelId(),
+                admin.getRole());
     }
 }

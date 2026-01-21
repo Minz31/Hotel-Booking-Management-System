@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.GenericGenerator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,12 +22,14 @@ public class Booking {
     @Column(columnDefinition = "VARCHAR(36)")
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "guest_id", nullable = false)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "passwordHash" })
     private Guest guest;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "hotel_id", nullable = false)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "roomTypes", "rooms" })
     private Hotel hotel;
 
     @Column(name = "check_in_date")
@@ -48,5 +51,6 @@ public class Booking {
     private Double finalAmount;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "booking" })
     private List<BookingRoom> bookingRooms;
 }

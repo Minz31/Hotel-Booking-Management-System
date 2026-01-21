@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.GenericGenerator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.List;
 
@@ -33,12 +34,14 @@ public class Hotel {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
-    // Relationships
+    // Relationships - JsonIgnore to prevent circular references and N+1
 
     @OneToMany(mappedBy = "hotel", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private List<RoomType> roomTypes;
 
     @OneToMany(mappedBy = "hotel", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Room> rooms;
 
     // Depending on schema, might have contacts, description etc.

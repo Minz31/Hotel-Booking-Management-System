@@ -38,7 +38,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll() // Login/Register
                         .requestMatchers("/api/hotels/**").permitAll() // Public hotel viewing
                         .requestMatchers("/api/rooms/**").permitAll() // Public room viewing
-                        .requestMatchers("/").permitAll() // Health check
+                        .requestMatchers("/api/reviews/hotel/**").permitAll() // Public review viewing
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/reviews/*/helpful").permitAll() // Mark
+                                                                                                                         // helpful
+                        .requestMatchers("/").permitAll() // Root
+                        .requestMatchers("/health").permitAll() // Health check
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session

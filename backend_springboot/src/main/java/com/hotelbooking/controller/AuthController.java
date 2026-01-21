@@ -4,29 +4,42 @@ import com.hotelbooking.dto.ApiResponse;
 import com.hotelbooking.dto.AuthRequest;
 import com.hotelbooking.dto.AuthResponse;
 import com.hotelbooking.model.Guest;
+import com.hotelbooking.model.Administrator;
+import com.hotelbooking.repository.GuestRepository;
+import com.hotelbooking.repository.AdministratorRepository;
 import com.hotelbooking.service.AuthService;
+import com.hotelbooking.security.CustomUserDetails;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private GuestRepository guestRepository;
+
+    @Autowired
+    private AdministratorRepository administratorRepository;
+
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Object>> login(@RequestBody AuthRequest request) { // Generic Object to wrap
-                                                                                         // nested data struct
+    public ResponseEntity<ApiResponse<Object>> login(@RequestBody AuthRequest request) {
         try {
             AuthResponse response = authService.login(request);
-            // Need to wrap in "data" to match frontend expectation: data: { user: ...,
-            // token: ... }
-            return ResponseEntity.ok(ApiResponse.success(response, "Login successful"));
+            // Wrap in the format frontend expects: { data: { user: {...}, token: "..." } }
+            Map<String, Object> data = new HashMap<>();
+            data.put("user", response.getUser());
+            data.put("token", response.getToken());
+            return ResponseEntity.ok(ApiResponse.success(data, "Login successful"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(401).body(ApiResponse.error(e.getMessage()));
         }
@@ -49,5 +62,47 @@ public class AuthController {
         } catch (RuntimeException e) {
             return ResponseEntity.status(409).body(ApiResponse.error(e.getMessage()));
         }
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<Object>> getMe(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Unauthorized"));
+        }
+
+        String userId = userDetails.getId();
+        String role = userDetails.getRole();
+
+        Map<String, Object> user = new HashMap<>();
+
+        if ("guest".equals(role)) {
+            Optional<Guest> guestOpt = guestRepository.findById(userId);
+            if (guestOpt.isPresent()) {
+                Guest guest = guestOpt.get();
+                user.put("id", guest.getId());
+                user.put("first_name", guest.getFirstName());
+                user.put("last_name", guest.getLastName());
+                user.put("email", guest.getEmail());
+                user.put("phone", guest.getPhone());
+                user.put("role", "guest");
+            } else {
+                return ResponseEntity.status(404).body(ApiResponse.error("User not found"));
+            }
+        } else {
+            Optional<Administrator> adminOpt = administratorRepository.findById(userId);
+            if (adminOpt.isPresent()) {
+                Administrator admin = adminOpt.get();
+                user.put("id", admin.getId());
+                user.put("username", admin.getUsername());
+                user.put("email", admin.getEmail());
+                user.put("full_name", admin.getFullName());
+                user.put("role", admin.getRole());
+                user.put("hotel_id", admin.getHotelId());
+            } else {
+                return ResponseEntity.status(404).body(ApiResponse.error("User not found"));
+            }
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(user));
     }
 }

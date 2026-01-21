@@ -9,9 +9,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/hotels")
-@CrossOrigin(origins = "*")
 public class HotelController {
 
     @Autowired
@@ -38,11 +40,43 @@ public class HotelController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{id}/room-types")
+    public ApiResponse<List<Map<String, Object>>> getHotelRoomTypes(@PathVariable String id) {
+        return ApiResponse.success(hotelService.getRoomTypesForHotel(id));
+    }
+
+    @GetMapping("/{id}/available-rooms")
+    public ApiResponse<Object> searchAvailableRooms(
+            @PathVariable String id,
+            @RequestParam(name = "check_in") String checkIn,
+            @RequestParam(name = "check_out") String checkOut,
+            @RequestParam(required = false) Integer guests) {
+        return ApiResponse.success(hotelService.searchAvailableRooms(id, checkIn, checkOut, guests));
+    }
+
     @PostMapping
     public ApiResponse<Hotel> createHotel(@RequestBody Hotel hotel) {
         Hotel created = hotelService.createHotel(hotel);
         return ApiResponse.success(created, "Hotel created successfully");
     }
 
-    // ... keeping other methods simple for now
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Object>> updateHotel(@PathVariable String id, @RequestBody Hotel hotel) {
+        try {
+            Hotel updated = hotelService.updateHotel(id, hotel);
+            return ResponseEntity.ok(ApiResponse.success(updated, "Hotel updated successfully"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Object>> deleteHotel(@PathVariable String id) {
+        try {
+            hotelService.deleteHotel(id);
+            return ResponseEntity.ok(ApiResponse.success(null, "Hotel deleted successfully"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
 }

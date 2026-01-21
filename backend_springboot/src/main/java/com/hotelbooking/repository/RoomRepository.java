@@ -17,6 +17,8 @@ public interface RoomRepository extends JpaRepository<Room, String> {
 
     List<Room> findByStatus(String status);
 
+    long countByRoomTypeId(String roomTypeId);
+
     @Query(value = """
                 SELECT * FROM rooms r
                 WHERE r.room_type_id = :roomTypeId
